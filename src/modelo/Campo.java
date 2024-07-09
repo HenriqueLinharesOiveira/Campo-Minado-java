@@ -1,9 +1,10 @@
 package modelo;
 
+
 import java.util.ArrayList;
 import java.util.List;
-
-import excecao.explosaoException;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 public class Campo {
 	
@@ -14,11 +15,22 @@ public class Campo {
 	private boolean minado = false;
 	private boolean marcado = false;
 	
-	private List <Campo> vizinhos = new ArrayList<>();
+	private List <Campo> vizinhos = new ArrayList<Campo>();
+	private List<CampoObservador> observadores = new ArrayList<>();
+	
 	
 	public Campo(int linha,int coluna){
 		this.linha = linha;
 		this.coluna = coluna;
+	}
+	
+	public void registraObservador(CampoObservador observador) {
+		observadores.add(observador); 
+	}
+	
+	private void notificarObservadores(CampoEvennto evento) {
+		observadores.stream()
+		.forEach(o -> o.eventoOcorreu(this, evento));
 	}
 	 
 	public boolean adicionarVizinho(Campo vizinho) {
@@ -44,6 +56,13 @@ public class Campo {
 	public void alternaMarcacao() {
 		if (!aberto) {
 			marcado = !marcado;
+
+			if (marcado) {
+				notificarObservadores(CampoEvennto.MARCAR);
+			}else {
+				notificarObservadores(CampoEvennto.DESMARCAR);
+			}
+			
 		}
 	}
 	
@@ -52,9 +71,14 @@ public class Campo {
 		if (!aberto && !marcado) {
 			aberto = true;
 			
-			if(minado) {
-				throw new explosaoException();
+			
+			if (minado){
+				notificarObservadores(CampoEvennto.EXPLODIR);
+				return true;
 			}
+			
+			setAberto(true);
+			
 			
 			if(vizinhancaSegura()) {
 				vizinhos.forEach(v -> v.abrir());
@@ -65,7 +89,7 @@ public class Campo {
 		}
 	}
 	
-	boolean vizinhancaSegura() {
+	public boolean vizinhancaSegura() {
 		return vizinhos.stream().noneMatch(v -> v.minado);
 	}
 	
@@ -82,6 +106,10 @@ public class Campo {
 	
 	public void setAberto(boolean aberto) {
 		this.aberto = aberto;
+		
+		if(aberto) {
+			notificarObservadores(CampoEvennto.ABRIR);
+		}
 	}
 
 	public boolean isAberto() {
@@ -107,26 +135,15 @@ public class Campo {
 		return desvendado || protegido;
 	}
 	
-	long minaNaVizinhanca() {
-		return vizinhos.stream().filter(v -> v.minado ).count();
+	public int minaNaVizinhanca() {
+		return (int)vizinhos.stream().filter(v -> v.minado ).count();
 	}
 	 void reiniciar () {
 		 aberto = false; 
 		 minado = false;
 		 marcado = false;
+		 notificarObservadores(CampoEvennto.REINICIAR);
 	 }
 	 
-	 public String toString() {
-		 if(marcado) {
-			 return "x";
-		 }else if (aberto && minado) {
-			return "*"; 
-		 }else if (aberto && minaNaVizinhanca()>0){
-			 return Long.toString(minaNaVizinhanca());
-		 }else if(aberto) {
-			 return " ";
-		 }else {
-			 return "?"; 
-		 }
+	 
 	 }
-}

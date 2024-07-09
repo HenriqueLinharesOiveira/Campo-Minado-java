@@ -1,18 +1,22 @@
 package modelo;
 
+import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 
-import excecao.explosaoException;
+import javax.management.remote.NotificationResult;
 
-public class Tabuleiro {
+public class Tabuleiro implements CampoObservador {
 	
-	private int linhas ;
-	private int colunas;
-	private int minas;
+	private final int linhas ;
+	private final int colunas;
+	private final int minas;
 	
 	private final List<Campo> campos = new ArrayList<Campo>();
+	private final List<Consumer<ResultadoEvento>> observadores = new ArrayList<Consumer<ResultadoEvento>>();
+			
 
 	public Tabuleiro(int linhas, int colunas, int minas) {
 		this.linhas = linhas;
@@ -24,18 +28,26 @@ public class Tabuleiro {
 		sortearMinas();
 	}
 	
+	public void ParaCadaCampo(Consumer<Campo> funcao) {
+		campos.forEach(funcao);
+	}
+	
+	public void registraObservado(Consumer<ResultadoEvento> observador) {
+		observadores.add(observador);
+	}
+	
+	private void notificarObservadores(boolean resultado) {
+		observadores.stream() .forEach( o -> o.accept(new ResultadoEvento(resultado)));
+	}
+	
 	public void abrir(int linha, int coluna) {
-		
-		try {
-			campos.parallelStream()
+		campos.parallelStream()
 			.filter(c -> c.getLinha() == linha && c.getColuna() == coluna)
 			.findFirst()
 			.ifPresent(c -> c.abrir());
-		} catch (explosaoException e) {
-			campos.forEach(c -> c.setAberto(true) );
-			throw e;
-		}
-			}
+		
+	}
+	
 	
 	public void alteraMarcacao(int linha, int coluna) {
 		campos.parallelStream()
@@ -44,13 +56,17 @@ public class Tabuleiro {
 		.ifPresent(c -> c.alternaMarcacao());
 	}
 
+	
 	private void gerarCampos() {
-		for (int l = 0; l < linhas; l++) {
-			for (int c = 0; c < colunas; c++) {
-				campos.add(new Campo(l, c));
+		for (int linha = 0; linha < linhas; linha++) {
+			for (int coluna = 0; coluna < colunas; coluna++) {
+				Campo campo = new Campo(linha, coluna);
+				campo.registraObservador(this);
+				campos.add(campo);
 			}
 		}
 	}
+	 
 	private void associarOsVizinhos() {
 		for(Campo c1: campos) {
 			for(Campo c2: campos) {
@@ -77,36 +93,37 @@ public class Tabuleiro {
 		campos.stream().forEach(c -> c.reiniciar());
 		sortearMinas();
 	}
-	
-	
-	
-	
-	public String toString() {
-		StringBuilder sb = new StringBuilder();
-		
-		for (int c = 0; c < colunas; c++) {
-			sb.append(" "	);
-			sb.append(c);
-			sb.append(" " );
+
+	public int getLinhas() {
+		return linhas;
+	}
+
+	public int getColunas() {
+		return colunas;
+	}
+
+	@Override
+	public void eventoOcorreu(Campo campo, CampoEvennto evento) {
+		if(evento == CampoEvennto.EXPLODIR) {
+			mostraminas();
+			 notificarObservadores(false);
+		}else if (objetivoAlcancado()) {
+			 notificarObservadores(true);
 		}
-		sb.append("\n");
+	}
+	
+	private void mostraminas() {
+		campos
+		.stream()
+		.filter(c -> c.isMinado())
+		.filter(c -> !c.isMarcado())
+		.forEach(c -> c.setAberto(true));
+	}
+
+	@Override
+	public void mouseDragged(MouseEvent e) {
+		// TODO Auto-generated method stub
 		
-		int i = 0 ;
-			for (int l = 0; l < linhas; l++) {
-				sb.append(l);
-				sb.append("|");  
-				for (int c = 0; c < colunas; c++) {
-					sb.append(" ");
-					sb.append(campos.get(i));
-					sb.append(" ");
-					i++;
-				}
-				sb.append("\n");
-			}
-			
-				return sb.toString();
-	
-	
 	}
 	
 }
